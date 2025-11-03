@@ -74,8 +74,8 @@
   "ollamaConfig": {
     "_baseUrl": "http://127.0.0.1:11434",
     "baseUrl": "https://ollama.lbsa71.net",
-    "model": "gpt-oss:20b",
-    "_model": "mistral:instruct",
+    "_model": "gpt-oss:20b",
+    "model": "mistral:instruct",
     "temperature": 0.8
   },
   "timerConfig": {
