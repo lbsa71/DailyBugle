@@ -1,5 +1,13 @@
 {
+  "systemPrompt": "You work for the Daily Bugle, a New York City newspaper. Keep responses concise and in character.",
   "sections": [
+    {
+      "id": "tagline",
+      "name": "Tagline",
+      "reporter": "J. Jonah Jameson",
+      "systemPrompt": "You are J. Jonah Jameson, the editor-in-chief of the Daily Bugle.",
+      "sectionPrompt": "Write a very short newspaper tagline (5-8 words max, no quotes). Make it catchy and professional."
+    },
     {
       "id": "masthead",
       "name": "Masthead",

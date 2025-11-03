@@ -155,7 +155,7 @@
     <div class="newspaper">
         <header class="header">
             <h1 class="masthead-title">The Daily Bugle</h1>
-            <p class="tagline">New York's Finest News Source Since 1897</p>
+            <p class="tagline" id="newspaper-tagline">New York's Finest News Source</p>
             <p class="date-line" id="current-date"></p>
         </header>
 
@@ -192,8 +192,9 @@
                 // Clear loading message
                 contentDiv.innerHTML = '';
                 
-                // Define section order
+                // Define section order (tagline is not shown in the main content)
                 const sectionOrder = [
+                    'tagline',
                     'masthead',
                     'weather',
                     'spiderman-sighting',
@@ -224,6 +225,15 @@
                         const doc = parser.parseFromString(articleHtml, 'text/html');
                         const articleContent = doc.querySelector('.content');
                         const content = articleContent ? articleContent.textContent : 'Content unavailable';
+                        
+                        // Special handling for tagline - update header only
+                        if (item.id === 'tagline') {
+                            const taglineElement = document.getElementById('newspaper-tagline');
+                            if (taglineElement && content && !content.includes('Error')) {
+                                taglineElement.textContent = content;
+                            }
+                            continue; // Don't display tagline in the main content
+                        }
                         
                         // Create section element
                         const sectionDiv = document.createElement('div');

@@ -109,7 +109,11 @@ async function callOllama(systemPrompt, userPrompt) {
  */
 async function generateSection(section) {
   console.log(`Generating ${section.name} by ${section.reporter}...`);
-  const content = await callOllama(section.systemPrompt, section.sectionPrompt);
+  // Concatenate global system prompt with section-specific prompt
+  const fullSystemPrompt = config.systemPrompt 
+    ? `${config.systemPrompt} ${section.systemPrompt}`
+    : section.systemPrompt;
+  const content = await callOllama(fullSystemPrompt, section.sectionPrompt);
   return {
     id: section.id,
     name: section.name,
