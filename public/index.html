@@ -270,7 +270,8 @@
         // Load news when page loads
         loadNews();
         
-        // Refresh news every 5 minutes
+        // Refresh news every 5 minutes to show updated content
+        // This is more frequent than the generation interval to ensure fresh content appears quickly
         setInterval(loadNews, 5 * 60 * 1000);
     </script>
 </body>

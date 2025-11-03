@@ -122,8 +122,10 @@ async function generateAllSections() {
   );
   
   // Create timestamp for filenames
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-  const timeHour = new Date().toISOString().split('T')[1].substring(0, 5).replace(':', '-');
+  const now = new Date();
+  const isoString = now.toISOString();
+  const timestamp = isoString.replace(/[:.]/g, '-').split('T')[0];
+  const timeHour = isoString.split('T')[1].substring(0, 5).replace(':', '-');
   const dateFolder = `${timestamp}_${timeHour}`;
   
   // Save each section to a file
@@ -135,7 +137,8 @@ async function generateAllSections() {
     const filename = `${dateFolder}.html`;
     const filepath = path.join(sectionDir, filename);
     
-    // Create HTML content
+    // Create simple HTML content for the article
+    // Template is inline for simplicity - this is a single-purpose POC service
     const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
