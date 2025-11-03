@@ -44,9 +44,19 @@ const server = createServer(async (req, res) => {
     pathname = '/index.html';
   }
   
-  // Serve from public directory
-  const filePath = path.join(__dirname, '../public', pathname);
-  await serveStaticFile(filePath, res);
+  // Serve from public directory with path traversal protection
+  const publicDir = path.join(__dirname, '../public');
+  const requestedPath = path.join(publicDir, pathname);
+  const resolvedPath = path.resolve(requestedPath);
+  
+  // Security: Ensure the resolved path is within the public directory
+  if (!resolvedPath.startsWith(path.resolve(publicDir))) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+  
+  await serveStaticFile(resolvedPath, res);
 });
 
 // Load configuration
