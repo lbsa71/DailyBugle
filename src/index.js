@@ -1,16 +1,53 @@
-import express from 'express';
+import { createServer } from 'http';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { parse as parseUrl } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve static files
-app.use(express.static(path.join(__dirname, '../public')));
+// Simple static file server
+const mimeTypes = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon'
+};
+
+async function serveStaticFile(filePath, res) {
+  try {
+    const data = await fs.readFile(filePath);
+    const ext = path.extname(filePath);
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': contentType });
+    res.end(data);
+  } catch (error) {
+    res.writeHead(404);
+    res.end('Not found');
+  }
+}
+
+const server = createServer(async (req, res) => {
+  const parsedUrl = parseUrl(req.url, true);
+  let pathname = parsedUrl.pathname;
+  
+  // Default to index.html
+  if (pathname === '/') {
+    pathname = '/index.html';
+  }
+  
+  // Serve from public directory
+  const filePath = path.join(__dirname, '../public', pathname);
+  await serveStaticFile(filePath, res);
+});
 
 // Load configuration
 let config;
@@ -164,7 +201,7 @@ function startTimer() {
 }
 
 // Start the web server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Daily Bugle server running on port ${PORT}`);
   console.log(`View the paper at http://localhost:${PORT}`);
   startTimer();
