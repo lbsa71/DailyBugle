@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Daily Bugle - New York's Finest News Source</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            background-color: #f5f5dc;
+            color: #1a1a1a;
+            line-height: 1.6;
+        }
+
+        .newspaper {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #fff;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .header {
+            border-top: 4px solid #c41e3a;
+            border-bottom: 4px solid #c41e3a;
+            padding: 20px 0;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .masthead-title {
+            font-size: 3.5em;
+            font-weight: bold;
+            letter-spacing: 0.1em;
+            color: #c41e3a;
+            text-transform: uppercase;
+            font-family: 'Georgia', serif;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .tagline {
+            font-size: 0.9em;
+            font-style: italic;
+            margin-top: 5px;
+            color: #666;
+        }
+
+        .date-line {
+            font-size: 0.85em;
+            margin-top: 10px;
+            color: #333;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 20px;
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #c41e3a;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            border-bottom: 3px solid #c41e3a;
+            padding-bottom: 5px;
+        }
+
+        .byline {
+            font-size: 0.9em;
+            font-style: italic;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .content {
+            font-size: 1.1em;
+            text-align: justify;
+            line-height: 1.8;
+            margin-bottom: 10px;
+        }
+
+        .timestamp {
+            font-size: 0.8em;
+            color: #999;
+            text-align: right;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+            color: #666;
+        }
+
+        .error {
+            background-color: #ffe6e6;
+            border: 1px solid #c41e3a;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+            color: #c41e3a;
+        }
+
+        .masthead-section {
+            background-color: #fff9e6;
+            border: 3px double #c41e3a;
+            padding: 15px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .masthead-content {
+            font-size: 1.3em;
+            font-weight: bold;
+            font-style: italic;
+            color: #1a1a1a;
+        }
+
+        @media print {
+            body {
+                background-color: white;
+            }
+            .newspaper {
+                box-shadow: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .newspaper {
+                padding: 10px;
+            }
+            .masthead-title {
+                font-size: 2.5em;
+            }
+            .section-title {
+                font-size: 1.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="newspaper">
+        <header class="header">
+            <h1 class="masthead-title">The Daily Bugle</h1>
+            <p class="tagline" id="newspaper-tagline">New York's Finest News Source</p>
+            <p class="date-line" id="current-date"></p>
+        </header>
+
+        <div id="news-content" class="loading">
+            Loading the latest news...
+        </div>
+    </div>
+
+    <script>
+        // Display current date
+        const dateElement = document.getElementById('current-date');
+        const now = new Date();
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        dateElement.textContent = now.toLocaleDateString('en-US', options);
+
+        // Fetch and display news
+        async function loadNews() {
+            const contentDiv = document.getElementById('news-content');
+            
+            try {
+                const response = await fetch('/news.json');
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to load news: ${response.status}`);
+                }
+                
+                const newsData = await response.json();
+                
+                if (!newsData.items || newsData.items.length === 0) {
+                    contentDiv.innerHTML = '<p class="loading">No news available yet. Check back soon!</p>';
+                    return;
+                }
+                
+                // Clear loading message
+                contentDiv.innerHTML = '';
+                
+                // Define section order (tagline is not shown in the main content)
+                const sectionOrder = [
+                    'tagline',
+                    'masthead',
+                    'weather',
+                    'spiderman-sighting',
+                    'villain-sighting',
+                    'editorial',
+                    'city-news',
+                    'sports',
+                    'business',
+                    'culture',
+                    'human-interest'
+                ];
+                
+                // Sort items by section order
+                const sortedItems = newsData.items.sort((a, b) => {
+                    const aIndex = sectionOrder.indexOf(a.id);
+                    const bIndex = sectionOrder.indexOf(b.id);
+                    return aIndex - bIndex;
+                });
+                
+                // Display each news item
+                for (const item of sortedItems) {
+                    try {
+                        const articleResponse = await fetch(item.url);
+                        const articleHtml = await articleResponse.text();
+                        
+                        // Parse the article HTML to extract content
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(articleHtml, 'text/html');
+                        const articleContent = doc.querySelector('.content');
+                        const content = articleContent ? articleContent.textContent : 'Content unavailable';
+                        
+                        // Special handling for tagline - update header only
+                        if (item.id === 'tagline') {
+                            const taglineElement = document.getElementById('newspaper-tagline');
+                            if (taglineElement && content && !content.includes('Error')) {
+                                taglineElement.textContent = content;
+                            }
+                            continue; // Don't display tagline in the main content
+                        }
+                        
+                        // Create section element
+                        const sectionDiv = document.createElement('div');
+                        
+                        // Special styling for masthead
+                        if (item.id === 'masthead') {
+                            sectionDiv.className = 'masthead-section';
+                            sectionDiv.innerHTML = `
+                                <div class="masthead-content">${content}</div>
+                            `;
+                        } else {
+                            sectionDiv.className = 'section';
+                            sectionDiv.innerHTML = `
+                                <h2 class="section-title">${item.name}</h2>
+                                <p class="byline">By ${item.reporter}</p>
+                                <div class="content">${content}</div>
+                                <p class="timestamp">${new Date(item.timestamp).toLocaleString()}</p>
+                            `;
+                        }
+                        
+                        contentDiv.appendChild(sectionDiv);
+                    } catch (error) {
+                        console.error(`Error loading article ${item.id}:`, error);
+                    }
+                }
+                
+                // If no content was loaded
+                if (contentDiv.children.length === 0) {
+                    contentDiv.innerHTML = '<p class="loading">No articles could be loaded. Please try again later.</p>';
+                }
+                
+            } catch (error) {
+                console.error('Error loading news:', error);
+                contentDiv.innerHTML = `
+                    <div class="error">
+                        <h3>Error Loading News</h3>
+                        <p>${error.message}</p>
+                        <p>Please check back later or contact the news desk.</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Load news when page loads
+        loadNews();
+        
+        // Refresh news every 5 minutes to show updated content
+        // This is more frequent than the generation interval to ensure fresh content appears quickly
+        setInterval(loadNews, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
