@@ -75,33 +75,28 @@ try {
 async function callOllama(systemPrompt, userPrompt) {
   const url = `${config.ollamaConfig.baseUrl}/api/generate`;
   
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: config.ollamaConfig.model,
-        prompt: userPrompt,
-        system: systemPrompt,
-        stream: false,
-        options: {
-          temperature: config.ollamaConfig.temperature
-        }
-      }),
-    });
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: config.ollamaConfig.model,
+      prompt: userPrompt,
+      system: systemPrompt,
+      stream: false,
+      options: {
+        temperature: config.ollamaConfig.temperature
+      }
+    }),
+  });
 
-    if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.response;
-  } catch (error) {
-    console.error('Error calling Ollama:', error);
-    return `Error generating content: ${error.message}`;
+  if (!response.ok) {
+    throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
   }
+
+  const data = await response.json();
+  return data.response;
 }
 
 /**
