@@ -34,7 +34,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKER_USERNAME }}/daily-bugle
+          images: ${{ secrets.DOCKER_USERNAME || 'dailybugle' }}/daily-bugle
           tags: |
             type=ref,event=branch
             type=ref,event=pr
