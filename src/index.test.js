@@ -399,12 +399,8 @@ test('generateAllSections - generates all sections and saves files', async () =>
   globalThis.fetch = originalFetch;
 });
 
-test('startTimer - calculates interval correctly', () => {
+test('startTimer - schedules at 1 AM', () => {
   const configData = {
-    timerConfig: {
-      intervalMinutes: 5,
-      runOnStartup: false
-    },
     sections: [],
     ollamaConfig: {
       baseUrl: 'http://localhost:11434',
@@ -419,58 +415,52 @@ test('startTimer - calculates interval correctly', () => {
   const originalLog = console.log;
   console.log = () => {};
   
-  // Mock setInterval to capture the interval
-  const intervals = [];
-  const originalSetInterval = global.setInterval;
-  global.setInterval = (fn, ms) => {
-    intervals.push({ fn, ms });
-    return 123; // mock interval ID
+  // Mock setTimeout to capture the schedule
+  const timeouts = [];
+  const originalSetTimeout = global.setTimeout;
+  global.setTimeout = (fn, ms) => {
+    timeouts.push({ fn, ms });
+    return 123; // mock timeout ID
+  };
+  
+  // Mock Date to control current time
+  const now = new Date('2024-01-15T14:30:00Z'); // 2:30 PM
+  const originalDate = global.Date;
+  global.Date = class extends originalDate {
+    constructor(...args) {
+      if (args.length === 0) {
+        super(now.getTime());
+      } else {
+        super(...args);
+      }
+    }
+    static now() {
+      return now.getTime();
+    }
   };
   
   startTimer(configData, testDir);
   
-  // Verify interval was set with correct milliseconds (5 minutes = 300000 ms)
-  assert.strictEqual(intervals.length, 1);
-  assert.strictEqual(intervals[0].ms, 5 * 60 * 1000);
+  // Verify setTimeout was called (for scheduling)
+  assert.ok(timeouts.length > 0);
+  
+  // Calculate expected time until next 1 AM
+  // Since we're at 2:30 PM, next 1 AM is tomorrow
+  // Should be between 9.5 and 11 hours (allowing for timezone differences)
+  const expectedMs = timeouts[0].ms;
+  const hours = expectedMs / 1000 / 60 / 60;
+  // Should be approximately 9.5-11 hours, allowing for timezone differences
+  assert.ok(expectedMs > 32400000 && expectedMs < 43200000, 
+    `Expected timeout between 9-12 hours, got ${expectedMs}ms (${hours.toFixed(2)} hours)`);
   
   console.log = originalLog;
-  global.setInterval = originalSetInterval;
+  global.setTimeout = originalSetTimeout;
+  global.Date = originalDate;
 });
 
-test('startTimer - runs on startup when configured', async () => {
-  let fetchCalls = [];
-  const mockResponse = {
-    ok: true,
-    json: async () => ({ response: 'Content' })
-  };
-  
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url, options) => {
-    fetchCalls.push({ url, options });
-    return mockResponse;
-  };
-  
-  const originalReadFile = fs.readFile;
-  const originalWriteFile = fs.writeFile;
-  const originalMkdir = fs.mkdir;
-  
-  fs.mkdir = async () => {};
-  fs.writeFile = async () => {};
-  
+test('startTimer - schedules next day at 1 AM', () => {
   const configData = {
-    timerConfig: {
-      intervalMinutes: 60,
-      runOnStartup: true
-    },
-    sections: [
-      {
-        id: 'test-section',
-        name: 'Test',
-        reporter: 'Reporter',
-        systemPrompt: 'Prompt',
-        sectionPrompt: 'Write'
-      }
-    ],
+    sections: [],
     ollamaConfig: {
       baseUrl: 'http://localhost:11434',
       model: 'test-model',
@@ -482,27 +472,42 @@ test('startTimer - runs on startup when configured', async () => {
   
   // Mock console methods
   const originalLog = console.log;
-  const originalError = console.error;
   console.log = () => {};
-  console.error = () => {};
   
-  // Mock setInterval
-  const originalSetInterval = global.setInterval;
-  global.setInterval = () => 123;
+  // Mock setTimeout
+  const timeouts = [];
+  const originalSetTimeout = global.setTimeout;
+  global.setTimeout = (fn, ms) => {
+    timeouts.push({ fn, ms });
+    return 123;
+  };
+  
+  // Mock Date - set to 2:30 PM
+  const now = new Date('2024-01-15T14:30:00Z');
+  const originalDate = global.Date;
+  global.Date = class extends originalDate {
+    constructor(...args) {
+      if (args.length === 0) {
+        super(now.getTime());
+      } else {
+        super(...args);
+      }
+    }
+    static now() {
+      return now.getTime();
+    }
+  };
   
   startTimer(configData, testDir);
   
-  // Wait a bit for the async startup generation
-  await new Promise(resolve => setTimeout(resolve, 100));
-  
-  // Verify fetch was called (generation started)
-  assert.ok(fetchCalls.length > 0);
+  // Verify setTimeout was called to schedule next 1 AM
+  assert.strictEqual(timeouts.length, 1);
+  // Next 1 AM should be approximately 9.5-11 hours away (allowing for timezone differences)
+  const hours = timeouts[0].ms / 1000 / 60 / 60;
+  assert.ok(timeouts[0].ms > 32400000 && timeouts[0].ms < 43200000,
+    `Expected timeout between 9-12 hours, got ${timeouts[0].ms}ms (${hours.toFixed(2)} hours)`);
   
   console.log = originalLog;
-  console.error = originalError;
-  global.setInterval = originalSetInterval;
-  fs.readFile = originalReadFile;
-  fs.writeFile = originalWriteFile;
-  fs.mkdir = originalMkdir;
-  globalThis.fetch = originalFetch;
+  global.setTimeout = originalSetTimeout;
+  global.Date = originalDate;
 });

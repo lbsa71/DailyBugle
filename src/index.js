@@ -86,9 +86,9 @@ function displayConfig(configData) {
   console.log(`  Model: ${configData.ollamaConfig.model}`);
   console.log(`  Temperature: ${configData.ollamaConfig.temperature}`);
   
-  console.log('\nTimer Configuration:');
-  console.log(`  Interval: ${configData.timerConfig.intervalMinutes} minutes`);
-  console.log(`  Run on Startup: ${configData.timerConfig.runOnStartup}`);
+  console.log('\nScheduler Configuration:');
+  console.log(`  Schedule: Daily at 1:00 AM`);
+  console.log(`  Retry on Failure: Every 10 minutes`);
   
   console.log('\nSystem Prompt:');
   console.log(`  ${configData.systemPrompt || '(none)'}`);
@@ -104,7 +104,7 @@ function displayConfig(configData) {
 /**
  * Call Ollama API to generate content
  */
-export async function callOllama(systemPrompt, userPrompt, ollamaConfig) {
+export async function callOllama(systemPrompt, userPrompt, ollamaConfig, signal = null) {
   const url = `${ollamaConfig.baseUrl}/api/generate`;
   
   const response = await fetch(url, {
@@ -121,6 +121,7 @@ export async function callOllama(systemPrompt, userPrompt, ollamaConfig) {
         temperature: ollamaConfig.temperature
       }
     }),
+    signal: signal
   });
 
   if (!response.ok) {
@@ -134,13 +135,13 @@ export async function callOllama(systemPrompt, userPrompt, ollamaConfig) {
 /**
  * Generate content for a single section
  */
-export async function generateSection(section, configData) {
+export async function generateSection(section, configData, signal = null) {
   console.log(`Generating ${section.name} by ${section.reporter}...`);
   // Concatenate global system prompt with section-specific prompt
   const fullSystemPrompt = configData.systemPrompt 
     ? `${configData.systemPrompt} ${section.systemPrompt}`
     : section.systemPrompt;
-  const content = await callOllama(fullSystemPrompt, section.sectionPrompt, configData.ollamaConfig);
+  const content = await callOllama(fullSystemPrompt, section.sectionPrompt, configData.ollamaConfig, signal);
   return {
     id: section.id,
     name: section.name,
@@ -153,13 +154,13 @@ export async function generateSection(section, configData) {
 /**
  * Generate all sections in parallel and save results
  */
-export async function generateAllSections(configData, baseDir) {
+export async function generateAllSections(configData, baseDir, signal = null) {
   console.log('Starting content generation...');
   const startTime = Date.now();
   
   // Generate all sections in parallel
   const results = await Promise.all(
-    configData.sections.map(section => generateSection(section, configData))
+    configData.sections.map(section => generateSection(section, configData, signal))
   );
   
   // Create timestamp for filenames
@@ -223,25 +224,127 @@ export async function generateAllSections(configData, baseDir) {
 }
 
 /**
- * Start the timer for periodic content generation
+ * Calculate the next 1 AM time
  */
-export function startTimer(configData, baseDir) {
-  const intervalMs = configData.timerConfig.intervalMinutes * 60 * 1000;
+function getNext1AM() {
+  const now = new Date();
+  const next1AM = new Date();
+  next1AM.setHours(1, 0, 0, 0);
   
-  console.log(`Timer set to run every ${configData.timerConfig.intervalMinutes} minutes`);
-  
-  if (configData.timerConfig.runOnStartup) {
-    console.log('Running initial generation on startup...');
-    generateAllSections(configData, baseDir).catch(error => {
-      console.error('Error during initial generation:', error);
-    });
+  // If it's already past 1 AM today, schedule for tomorrow
+  if (now >= next1AM) {
+    next1AM.setDate(next1AM.getDate() + 1);
   }
   
-  setInterval(() => {
-    generateAllSections(configData, baseDir).catch(error => {
-      console.error('Error during scheduled generation:', error);
-    });
-  }, intervalMs);
+  return next1AM;
+}
+
+/**
+ * Format time for display
+ */
+function formatTime(date) {
+  return date.toLocaleString('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  });
+}
+
+/**
+ * Start the scheduler for daily content generation at 1 AM with retry logic
+ */
+export function startTimer(configData, baseDir) {
+  let currentGenerationAbortController = null;
+  let retryTimeoutId = null;
+  let nextScheduleTimeoutId = null;
+  
+  const RETRY_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+  
+  /**
+   * Attempt to generate content with cancellation support
+   */
+  async function attemptGeneration() {
+    // Cancel any ongoing generation
+    if (currentGenerationAbortController) {
+      console.log('Cancelling previous generation attempt...');
+      currentGenerationAbortController.abort();
+    }
+    
+    // Create new abort controller for this attempt
+    currentGenerationAbortController = new AbortController();
+    const signal = currentGenerationAbortController.signal;
+    
+    try {
+      console.log('Attempting content generation...');
+      await generateAllSections(configData, baseDir, signal);
+      
+      // Success! Clear retry timeout and schedule next day
+      if (retryTimeoutId) {
+        clearTimeout(retryTimeoutId);
+        retryTimeoutId = null;
+      }
+      
+      console.log('Content generation successful!');
+      scheduleNextDay();
+      currentGenerationAbortController = null;
+    } catch (error) {
+      // Check if it was cancelled
+      if (signal.aborted) {
+        console.log('Generation was cancelled');
+        return;
+      }
+      
+      // Generation failed - log error and schedule retry
+      console.error('Error during content generation:', error.message);
+      console.log(`Scheduling retry in 10 minutes...`);
+      
+      // Cancel any existing retry timeout
+      if (retryTimeoutId) {
+        clearTimeout(retryTimeoutId);
+      }
+      
+      // Schedule retry in 10 minutes
+      retryTimeoutId = setTimeout(() => {
+        retryTimeoutId = null;
+        attemptGeneration();
+      }, RETRY_INTERVAL_MS);
+      
+      currentGenerationAbortController = null;
+    }
+  }
+  
+  /**
+   * Schedule the next day's generation at 1 AM
+   */
+  function scheduleNextDay() {
+    // Clear any existing schedule
+    if (nextScheduleTimeoutId) {
+      clearTimeout(nextScheduleTimeoutId);
+    }
+    
+    const next1AM = getNext1AM();
+    const msUntil1AM = next1AM.getTime() - Date.now();
+    
+    console.log(`Next generation scheduled for: ${formatTime(next1AM)}`);
+    console.log(`(in ${Math.round(msUntil1AM / 1000 / 60)} minutes)`);
+    
+    nextScheduleTimeoutId = setTimeout(() => {
+      nextScheduleTimeoutId = null;
+      attemptGeneration();
+    }, msUntil1AM);
+  }
+  
+  // Start the scheduler
+  console.log('Scheduler initialized: Daily generation at 1 AM');
+  console.log('Retry interval: 10 minutes on failure');
+  
+  // Schedule first run
+  scheduleNextDay();
 }
 
 // Start the web server (only when run directly, not when imported)
