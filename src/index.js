@@ -74,6 +74,34 @@ try {
 }
 
 /**
+ * Display configuration settings at startup
+ */
+function displayConfig(configData) {
+  console.log('\n========================================');
+  console.log('Daily Bugle Configuration');
+  console.log('========================================\n');
+  
+  console.log('Ollama Configuration:');
+  console.log(`  Base URL: ${configData.ollamaConfig.baseUrl}`);
+  console.log(`  Model: ${configData.ollamaConfig.model}`);
+  console.log(`  Temperature: ${configData.ollamaConfig.temperature}`);
+  
+  console.log('\nTimer Configuration:');
+  console.log(`  Interval: ${configData.timerConfig.intervalMinutes} minutes`);
+  console.log(`  Run on Startup: ${configData.timerConfig.runOnStartup}`);
+  
+  console.log('\nSystem Prompt:');
+  console.log(`  ${configData.systemPrompt || '(none)'}`);
+  
+  console.log(`\nSections: ${configData.sections.length}`);
+  configData.sections.forEach((section, index) => {
+    console.log(`  ${index + 1}. ${section.name} (${section.id}) - ${section.reporter}`);
+  });
+  
+  console.log('\n========================================\n');
+}
+
+/**
  * Call Ollama API to generate content
  */
 export async function callOllama(systemPrompt, userPrompt, ollamaConfig) {
@@ -222,6 +250,9 @@ const isMainModule = import.meta.url === `file://${path.resolve(process.argv[1] 
                      fileURLToPath(import.meta.url) === path.resolve(process.argv[1] || '');
 
 if (isMainModule) {
+  // Display configuration at startup
+  displayConfig(config);
+  
   server.listen(PORT, () => {
     console.log(`Daily Bugle server running on port ${PORT}`);
     console.log(`View the paper at http://localhost:${PORT}`);
