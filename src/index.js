@@ -203,7 +203,7 @@ export async function generateAllSections(configData, baseDir) {
       id: result.id,
       name: result.name,
       reporter: result.reporter,
-      url: `/sections/${result.id}/${filename}`,
+      url: `./sections/${result.id}/${filename}`,
       timestamp: result.timestamp
     });
     
