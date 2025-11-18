@@ -22,7 +22,7 @@ const mimeTypes = {
   '.ico': 'image/x-icon'
 };
 
-async function serveStaticFile(filePath, res) {
+export async function serveStaticFile(filePath, res) {
   try {
     const data = await fs.readFile(filePath);
     const ext = path.extname(filePath);
@@ -35,29 +35,33 @@ async function serveStaticFile(filePath, res) {
   }
 }
 
-const server = createServer(async (req, res) => {
-  const parsedUrl = parseUrl(req.url, true);
-  let pathname = parsedUrl.pathname;
-  
-  // Default to index.html
-  if (pathname === '/') {
-    pathname = '/index.html';
-  }
-  
-  // Serve from public directory with path traversal protection
-  const publicDir = path.join(__dirname, '../public');
-  const requestedPath = path.join(publicDir, pathname);
-  const resolvedPath = path.resolve(requestedPath);
-  
-  // Security: Ensure the resolved path is within the public directory
-  if (!resolvedPath.startsWith(path.resolve(publicDir))) {
-    res.writeHead(403);
-    res.end('Forbidden');
-    return;
-  }
-  
-  await serveStaticFile(resolvedPath, res);
-});
+export function createRequestHandler(baseDir) {
+  return async (req, res) => {
+    const parsedUrl = parseUrl(req.url, true);
+    let pathname = parsedUrl.pathname;
+    
+    // Default to index.html
+    if (pathname === '/') {
+      pathname = '/index.html';
+    }
+    
+    // Serve from public directory with path traversal protection
+    const publicDir = path.join(baseDir, '../public');
+    const requestedPath = path.join(publicDir, pathname);
+    const resolvedPath = path.resolve(requestedPath);
+    
+    // Security: Ensure the resolved path is within the public directory
+    if (!resolvedPath.startsWith(path.resolve(publicDir))) {
+      res.writeHead(403);
+      res.end('Forbidden');
+      return;
+    }
+    
+    await serveStaticFile(resolvedPath, res);
+  };
+}
+
+const server = createServer(createRequestHandler(__dirname));
 
 // Load configuration
 let config;
@@ -72,8 +76,8 @@ try {
 /**
  * Call Ollama API to generate content
  */
-async function callOllama(systemPrompt, userPrompt) {
-  const url = `${config.ollamaConfig.baseUrl}/api/generate`;
+export async function callOllama(systemPrompt, userPrompt, ollamaConfig) {
+  const url = `${ollamaConfig.baseUrl}/api/generate`;
   
   const response = await fetch(url, {
     method: 'POST',
@@ -81,12 +85,12 @@ async function callOllama(systemPrompt, userPrompt) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: config.ollamaConfig.model,
+      model: ollamaConfig.model,
       prompt: userPrompt,
       system: systemPrompt,
       stream: false,
       options: {
-        temperature: config.ollamaConfig.temperature
+        temperature: ollamaConfig.temperature
       }
     }),
   });
@@ -102,13 +106,13 @@ async function callOllama(systemPrompt, userPrompt) {
 /**
  * Generate content for a single section
  */
-async function generateSection(section) {
+export async function generateSection(section, configData) {
   console.log(`Generating ${section.name} by ${section.reporter}...`);
   // Concatenate global system prompt with section-specific prompt
-  const fullSystemPrompt = config.systemPrompt 
-    ? `${config.systemPrompt} ${section.systemPrompt}`
+  const fullSystemPrompt = configData.systemPrompt 
+    ? `${configData.systemPrompt} ${section.systemPrompt}`
     : section.systemPrompt;
-  const content = await callOllama(fullSystemPrompt, section.sectionPrompt);
+  const content = await callOllama(fullSystemPrompt, section.sectionPrompt, configData.ollamaConfig);
   return {
     id: section.id,
     name: section.name,
@@ -121,13 +125,13 @@ async function generateSection(section) {
 /**
  * Generate all sections in parallel and save results
  */
-async function generateAllSections() {
+export async function generateAllSections(configData, baseDir) {
   console.log('Starting content generation...');
   const startTime = Date.now();
   
   // Generate all sections in parallel
   const results = await Promise.all(
-    config.sections.map(section => generateSection(section))
+    configData.sections.map(section => generateSection(section, configData))
   );
   
   // Create timestamp for filenames
@@ -140,7 +144,7 @@ async function generateAllSections() {
   // Save each section to a file
   const newsItems = [];
   for (const result of results) {
-    const sectionDir = path.join(__dirname, '../public/sections', result.id);
+    const sectionDir = path.join(baseDir, '../public/sections', result.id);
     await fs.mkdir(sectionDir, { recursive: true });
     
     const filename = `${dateFolder}.html`;
@@ -179,7 +183,7 @@ async function generateAllSections() {
   }
   
   // Update news.json
-  const newsJsonPath = path.join(__dirname, '../public/news.json');
+  const newsJsonPath = path.join(baseDir, '../public/news.json');
   await fs.writeFile(newsJsonPath, JSON.stringify({ 
     items: newsItems,
     generated: new Date().toISOString()
@@ -193,28 +197,34 @@ async function generateAllSections() {
 /**
  * Start the timer for periodic content generation
  */
-function startTimer() {
-  const intervalMs = config.timerConfig.intervalMinutes * 60 * 1000;
+export function startTimer(configData, baseDir) {
+  const intervalMs = configData.timerConfig.intervalMinutes * 60 * 1000;
   
-  console.log(`Timer set to run every ${config.timerConfig.intervalMinutes} minutes`);
+  console.log(`Timer set to run every ${configData.timerConfig.intervalMinutes} minutes`);
   
-  if (config.timerConfig.runOnStartup) {
+  if (configData.timerConfig.runOnStartup) {
     console.log('Running initial generation on startup...');
-    generateAllSections().catch(error => {
+    generateAllSections(configData, baseDir).catch(error => {
       console.error('Error during initial generation:', error);
     });
   }
   
   setInterval(() => {
-    generateAllSections().catch(error => {
+    generateAllSections(configData, baseDir).catch(error => {
       console.error('Error during scheduled generation:', error);
     });
   }, intervalMs);
 }
 
-// Start the web server
-server.listen(PORT, () => {
-  console.log(`Daily Bugle server running on port ${PORT}`);
-  console.log(`View the paper at http://localhost:${PORT}`);
-  startTimer();
-});
+// Start the web server (only when run directly, not when imported)
+// Check if this module is being run directly by comparing the resolved file paths
+const isMainModule = import.meta.url === `file://${path.resolve(process.argv[1] || '')}`.replace(/\\/g, '/') ||
+                     fileURLToPath(import.meta.url) === path.resolve(process.argv[1] || '');
+
+if (isMainModule) {
+  server.listen(PORT, () => {
+    console.log(`Daily Bugle server running on port ${PORT}`);
+    console.log(`View the paper at http://localhost:${PORT}`);
+    startTimer(config, __dirname);
+  });
+}
