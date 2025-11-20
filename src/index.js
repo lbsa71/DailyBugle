@@ -343,8 +343,9 @@ export function startTimer(configData, baseDir) {
   console.log('Scheduler initialized: Daily generation at 1 AM');
   console.log('Retry interval: 10 minutes on failure');
   
-  // Schedule first run
-  scheduleNextDay();
+  // Run generation immediately on startup
+  console.log('Running initial content generation on startup...');
+  attemptGeneration();
 }
 
 // Start the web server (only when run directly, not when imported)
