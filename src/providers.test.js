@@ -344,7 +344,7 @@ test('ProviderFactory - throws error for null config', () => {
   assert.throws(
     () => ProviderFactory.createProvider(null),
     {
-      message: 'Provider configuration must include a type property'
+      message: 'Provider configuration is required'
     }
   );
 });

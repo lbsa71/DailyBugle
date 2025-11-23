@@ -13,7 +13,11 @@ export class ProviderFactory {
    * @returns {BaseProvider} Provider instance
    */
   static createProvider(providerConfig) {
-    if (!providerConfig || !providerConfig.type) {
+    if (!providerConfig) {
+      throw new Error('Provider configuration is required');
+    }
+    
+    if (!providerConfig.type) {
       throw new Error('Provider configuration must include a type property');
     }
     
