@@ -255,7 +255,10 @@ test('generateSection - generates section with global system prompt', async () =
     }
   };
   
-  const result = await generateSection(section, configData);
+  // Create provider instance
+  const provider = new OllamaProvider(configData.provider.config);
+  
+  const result = await generateSection(section, configData, provider);
   
   assert.strictEqual(result.id, 'test-section');
   assert.strictEqual(result.name, 'Test Section');
@@ -303,7 +306,10 @@ test('generateSection - generates section without global system prompt', async (
     }
   };
   
-  const result = await generateSection(section, configData);
+  // Create provider instance
+  const provider = new OllamaProvider(configData.provider.config);
+  
+  const result = await generateSection(section, configData, provider);
   
   assert.strictEqual(result.content, 'Article content');
   

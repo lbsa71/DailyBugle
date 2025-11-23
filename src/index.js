@@ -157,18 +157,17 @@ export async function generateContent(systemPrompt, userPrompt, provider, signal
 
 /**
  * Generate content for a single section
+ * @param {Object} section - Section configuration
+ * @param {Object} configData - Full configuration data
+ * @param {BaseProvider} provider - Provider instance to use for generation
+ * @param {AbortSignal} signal - Optional abort signal
  */
-export async function generateSection(section, configData, signal = null) {
+export async function generateSection(section, configData, provider, signal = null) {
   console.log(`Generating ${section.name} by ${section.reporter}...`);
   // Concatenate global system prompt with section-specific prompt
   const fullSystemPrompt = configData.systemPrompt 
     ? `${configData.systemPrompt} ${section.systemPrompt}`
     : section.systemPrompt;
-  
-  // Create provider instance if not already created
-  const provider = configData.provider instanceof Object && typeof configData.provider.generate === 'function'
-    ? configData.provider
-    : ProviderFactory.createProvider(configData.provider);
   
   const content = await generateContent(fullSystemPrompt, section.sectionPrompt, provider, signal);
   return {
@@ -187,9 +186,12 @@ export async function generateAllSections(configData, baseDir, signal = null) {
   console.log('Starting content generation...');
   const startTime = Date.now();
   
+  // Create provider instance once for all sections
+  const provider = ProviderFactory.createProvider(configData.provider);
+  
   // Generate all sections in parallel
   const results = await Promise.all(
-    configData.sections.map(section => generateSection(section, configData, signal))
+    configData.sections.map(section => generateSection(section, configData, provider, signal))
   );
   
   // Create timestamp for filenames
