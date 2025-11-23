@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { parse as parseUrl } from 'url';
+import { ProviderFactory } from './providers/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,6 +69,19 @@ let config;
 try {
   const configData = await fs.readFile(path.join(__dirname, '../config/sections.json'), 'utf-8');
   config = JSON.parse(configData);
+  
+  // Backward compatibility: convert old ollamaConfig to new provider format
+  if (config.ollamaConfig && !config.provider) {
+    config.provider = {
+      type: 'ollama',
+      config: config.ollamaConfig
+    };
+  }
+  
+  // Validate provider configuration
+  if (!config.provider || !config.provider.type) {
+    throw new Error('Configuration must include provider.type');
+  }
 } catch (error) {
   console.error('Error loading config:', error);
   process.exit(1);
@@ -81,10 +95,11 @@ function displayConfig(configData) {
   console.log('Daily Bugle Configuration');
   console.log('========================================\n');
   
-  console.log('Ollama Configuration:');
-  console.log(`  Base URL: ${configData.ollamaConfig.baseUrl}`);
-  console.log(`  Model: ${configData.ollamaConfig.model}`);
-  console.log(`  Temperature: ${configData.ollamaConfig.temperature}`);
+  console.log('AI Provider Configuration:');
+  console.log(`  Provider: ${configData.provider.type}`);
+  console.log(`  Base URL: ${configData.provider.config.baseUrl}`);
+  console.log(`  Model: ${configData.provider.config.model}`);
+  console.log(`  Temperature: ${configData.provider.config.temperature}`);
   
   console.log('\nScheduler Configuration:');
   console.log(`  Schedule: Daily at 1:00 AM`);
@@ -102,7 +117,8 @@ function displayConfig(configData) {
 }
 
 /**
- * Call Ollama API to generate content
+ * Call Ollama API to generate content (deprecated - use generateContent instead)
+ * Kept for backward compatibility with existing tests
  */
 export async function callOllama(systemPrompt, userPrompt, ollamaConfig, signal = null) {
   const url = `${ollamaConfig.baseUrl}/api/generate`;
@@ -133,6 +149,13 @@ export async function callOllama(systemPrompt, userPrompt, ollamaConfig, signal 
 }
 
 /**
+ * Generate content using the configured AI provider
+ */
+export async function generateContent(systemPrompt, userPrompt, provider, signal = null) {
+  return await provider.generate(systemPrompt, userPrompt, signal);
+}
+
+/**
  * Generate content for a single section
  */
 export async function generateSection(section, configData, signal = null) {
@@ -141,7 +164,13 @@ export async function generateSection(section, configData, signal = null) {
   const fullSystemPrompt = configData.systemPrompt 
     ? `${configData.systemPrompt} ${section.systemPrompt}`
     : section.systemPrompt;
-  const content = await callOllama(fullSystemPrompt, section.sectionPrompt, configData.ollamaConfig, signal);
+  
+  // Create provider instance if not already created
+  const provider = configData.provider instanceof Object && typeof configData.provider.generate === 'function'
+    ? configData.provider
+    : ProviderFactory.createProvider(configData.provider);
+  
+  const content = await generateContent(fullSystemPrompt, section.sectionPrompt, provider, signal);
   return {
     id: section.id,
     name: section.name,
