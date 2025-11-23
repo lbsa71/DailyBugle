@@ -328,3 +328,23 @@ test('ProviderFactory - throws error for unknown type', () => {
     }
   );
 });
+
+test('ProviderFactory - throws error for missing type', () => {
+  assert.throws(
+    () => ProviderFactory.createProvider({
+      config: {}
+    }),
+    {
+      message: 'Provider configuration must include a type property'
+    }
+  );
+});
+
+test('ProviderFactory - throws error for null config', () => {
+  assert.throws(
+    () => ProviderFactory.createProvider(null),
+    {
+      message: 'Provider configuration must include a type property'
+    }
+  );
+});

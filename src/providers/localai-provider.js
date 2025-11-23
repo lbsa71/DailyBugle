@@ -1,4 +1,5 @@
 import { BaseProvider } from './base-provider.js';
+import { DEFAULT_TEMPERATURE } from './constants.js';
 
 /**
  * LocalAI provider implementation (OpenAI-compatible API)
@@ -53,7 +54,7 @@ export class LocalAIProvider extends BaseProvider {
       body: JSON.stringify({
         model: this.config.model,
         messages: messages,
-        temperature: this.config.temperature || 0.8
+        temperature: this.config.temperature || DEFAULT_TEMPERATURE
       }),
       signal: signal
     });

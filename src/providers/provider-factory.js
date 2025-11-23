@@ -13,7 +13,11 @@ export class ProviderFactory {
    * @returns {BaseProvider} Provider instance
    */
   static createProvider(providerConfig) {
-    const type = providerConfig.type?.toLowerCase();
+    if (!providerConfig || !providerConfig.type) {
+      throw new Error('Provider configuration must include a type property');
+    }
+    
+    const type = providerConfig.type.toLowerCase();
     
     switch (type) {
       case 'ollama':

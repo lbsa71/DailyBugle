@@ -1,4 +1,5 @@
 import { BaseProvider } from './base-provider.js';
+import { DEFAULT_TEMPERATURE } from './constants.js';
 
 /**
  * Ollama provider implementation
@@ -43,7 +44,7 @@ export class OllamaProvider extends BaseProvider {
         system: systemPrompt,
         stream: false,
         options: {
-          temperature: this.config.temperature || 0.8
+          temperature: this.config.temperature || DEFAULT_TEMPERATURE
         }
       }),
       signal: signal
