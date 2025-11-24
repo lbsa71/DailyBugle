@@ -32,4 +32,22 @@ export class BaseProvider {
   getName() {
     throw new Error('getName() must be implemented by subclass');
   }
+
+  /**
+   * Check if provider supports image generation
+   * @returns {boolean} True if provider can generate images
+   */
+  get canGenerateImages() {
+    throw new Error('canGenerateImages must be implemented by subclass');
+  }
+
+  /**
+   * Generate an image using the AI provider
+   * @param {string} prompt - Prompt for image generation
+   * @param {AbortSignal} signal - Optional abort signal for cancellation
+   * @returns {Promise<Buffer>} Generated image as a buffer
+   */
+  async generateImage(prompt, signal = null) {
+    throw new Error('generateImage() must be implemented by subclass');
+  }
 }

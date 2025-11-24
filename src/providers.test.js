@@ -46,6 +46,7 @@ test('OllamaProvider - creates instance with valid config', () => {
   assert.strictEqual(provider.getName(), 'ollama');
   assert.strictEqual(provider.config.baseUrl, 'http://localhost:11434');
   assert.strictEqual(provider.config.model, 'test-model');
+  assert.strictEqual(provider.canGenerateImages, false);
 });
 
 test('OllamaProvider - generates content successfully', async () => {
@@ -87,7 +88,8 @@ test('OllamaProvider - handles API errors', async () => {
   const mockResponse = {
     ok: false,
     status: 500,
-    statusText: 'Internal Server Error'
+    statusText: 'Internal Server Error',
+    text: async () => 'Error details'
   };
   
   const originalFetch = globalThis.fetch;
@@ -102,11 +104,26 @@ test('OllamaProvider - handles API errors', async () => {
   await assert.rejects(
     () => provider.generate('System prompt', 'User prompt'),
     {
-      message: 'Ollama API error: 500 Internal Server Error'
+      message: 'Ollama API error: 500 Internal Server Error - Error details'
     }
   );
   
   globalThis.fetch = originalFetch;
+});
+
+test('OllamaProvider - throws error on image generation', async () => {
+  const provider = new OllamaProvider({
+    baseUrl: 'http://localhost:11434',
+    model: 'test-model',
+    temperature: 0.8
+  });
+  
+  await assert.rejects(
+    () => provider.generateImage('Test prompt'),
+    {
+      message: 'Image generation is not supported by Ollama provider'
+    }
+  );
 });
 
 // Test LocalAIProvider
@@ -138,6 +155,7 @@ test('LocalAIProvider - creates instance with valid config', () => {
   assert.strictEqual(provider.getName(), 'localai');
   assert.strictEqual(provider.config.baseUrl, 'http://localhost:8080');
   assert.strictEqual(provider.config.model, 'gpt-3.5-turbo');
+  assert.strictEqual(provider.canGenerateImages, true);
 });
 
 test('LocalAIProvider - generates content successfully', async () => {
@@ -218,7 +236,8 @@ test('LocalAIProvider - handles API errors', async () => {
   const mockResponse = {
     ok: false,
     status: 401,
-    statusText: 'Unauthorized'
+    statusText: 'Unauthorized',
+    text: async () => 'Authentication failed'
   };
   
   const originalFetch = globalThis.fetch;
@@ -233,7 +252,7 @@ test('LocalAIProvider - handles API errors', async () => {
   await assert.rejects(
     () => provider.generate('System prompt', 'User prompt'),
     {
-      message: 'LocalAI API error: 401 Unauthorized'
+      message: 'LocalAI API error: 401 Unauthorized - Authentication failed'
     }
   );
   
@@ -259,6 +278,99 @@ test('LocalAIProvider - handles invalid response format', async () => {
     () => provider.generate('System prompt', 'User prompt'),
     {
       message: 'Invalid response format from LocalAI API'
+    }
+  );
+  
+  globalThis.fetch = originalFetch;
+});
+
+test('LocalAIProvider - generates image successfully', async () => {
+  let fetchCall = null;
+  const mockImageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const mockResponse = {
+    ok: true,
+    json: async () => ({
+      data: [
+        {
+          b64_json: mockImageData
+        }
+      ]
+    })
+  };
+  
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    fetchCall = { url, options };
+    return mockResponse;
+  };
+  
+  const provider = new LocalAIProvider({
+    baseUrl: 'http://localhost:8080',
+    model: 'dall-e-3',
+    temperature: 0.8
+  });
+  
+  const result = await provider.generateImage('Test image prompt');
+  
+  assert.ok(result instanceof Buffer);
+  assert.strictEqual(fetchCall.url, 'http://localhost:8080/v1/images/generations');
+  assert.strictEqual(fetchCall.options.method, 'POST');
+  
+  const body = JSON.parse(fetchCall.options.body);
+  assert.strictEqual(body.prompt, 'Test image prompt');
+  assert.strictEqual(body.n, 1);
+  assert.strictEqual(body.size, '256x256');
+  assert.strictEqual(body.response_format, 'b64_json');
+  
+  globalThis.fetch = originalFetch;
+});
+
+test('LocalAIProvider - handles image generation errors', async () => {
+  const mockResponse = {
+    ok: false,
+    status: 500,
+    statusText: 'Internal Server Error',
+    text: async () => 'Image generation failed'
+  };
+  
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => mockResponse;
+  
+  const provider = new LocalAIProvider({
+    baseUrl: 'http://localhost:8080',
+    model: 'dall-e-3',
+    temperature: 0.8
+  });
+  
+  await assert.rejects(
+    () => provider.generateImage('Test prompt'),
+    {
+      message: 'LocalAI image generation error: 500 Internal Server Error - Image generation failed'
+    }
+  );
+  
+  globalThis.fetch = originalFetch;
+});
+
+test('LocalAIProvider - handles invalid image response format', async () => {
+  const mockResponse = {
+    ok: true,
+    json: async () => ({ invalid: 'response' })
+  };
+  
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => mockResponse;
+  
+  const provider = new LocalAIProvider({
+    baseUrl: 'http://localhost:8080',
+    model: 'dall-e-3',
+    temperature: 0.8
+  });
+  
+  await assert.rejects(
+    () => provider.generateImage('Test prompt'),
+    {
+      message: 'Invalid image response format from LocalAI API'
     }
   );
   

@@ -201,14 +201,45 @@ export async function generateAllSections(configData, baseDir, signal = null) {
   const timeHour = isoString.split('T')[1].substring(0, 5).replace(':', '-');
   const dateFolder = `${timestamp}_${timeHour}`;
   
+  // Generate images if provider supports it
+  let imageResults = [];
+  if (provider.canGenerateImages) {
+    console.log('Generating images for articles...');
+    imageResults = await Promise.all(
+      results.map(async (result, index) => {
+        try {
+          const section = configData.sections[index];
+          // Create image prompt: section system prompt + article text
+          const imagePrompt = `${section.systemPrompt} ${result.content}`;
+          console.log(`Generating image for ${result.name}...`);
+          const imageBuffer = await provider.generateImage(imagePrompt, signal);
+          return { id: result.id, imageBuffer };
+        } catch (error) {
+          console.error(`Failed to generate image for ${result.name}:`, error.message);
+          return { id: result.id, imageBuffer: null };
+        }
+      })
+    );
+  }
+  
   // Save each section to a file
   const newsItems = [];
-  for (const result of results) {
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
     const sectionDir = path.join(baseDir, '../public/sections', result.id);
     await fs.mkdir(sectionDir, { recursive: true });
     
     const filename = `${dateFolder}.html`;
     const filepath = path.join(sectionDir, filename);
+    
+    // Save image if available
+    let imageFilename = null;
+    if (provider.canGenerateImages && imageResults[i] && imageResults[i].imageBuffer) {
+      imageFilename = `${dateFolder}.png`;
+      const imagePath = path.join(sectionDir, imageFilename);
+      await fs.writeFile(imagePath, imageResults[i].imageBuffer);
+      console.log(`Saved image for ${result.name} to ${imagePath}`);
+    }
     
     // Create simple HTML content for the article
     // Template is inline for simplicity - this is a single-purpose POC service
@@ -236,6 +267,7 @@ export async function generateAllSections(configData, baseDir, signal = null) {
       name: result.name,
       reporter: result.reporter,
       url: `./sections/${result.id}/${filename}`,
+      imageUrl: imageFilename ? `./sections/${result.id}/${imageFilename}` : null,
       timestamp: result.timestamp
     });
     
