@@ -416,6 +416,182 @@ test('generateAllSections - generates all sections and saves files', async () =>
   globalThis.fetch = originalFetch;
 });
 
+test('generateAllSections - generates images when provider supports it', async () => {
+  let fetchCalls = [];
+  const mockImageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    fetchCalls.push({ url, options });
+    
+    // Mock text generation response
+    if (url.includes('/chat/completions')) {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Generated article content' } }]
+        })
+      };
+    }
+    
+    // Mock image generation response
+    if (url.includes('/images/generations')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: [{ b64_json: mockImageData }]
+        })
+      };
+    }
+    
+    return { ok: false, status: 404 };
+  };
+  
+  const originalWriteFile = fs.writeFile;
+  const originalMkdir = fs.mkdir;
+  
+  const writeFileCalls = [];
+  const mkdirCalls = [];
+  
+  fs.mkdir = async (dir) => {
+    mkdirCalls.push(dir);
+  };
+  
+  fs.writeFile = async (filepath, content) => {
+    writeFileCalls.push({ filepath, content });
+  };
+  
+  const configData = {
+    systemPrompt: 'Global prompt',
+    sections: [
+      {
+        id: 'section1',
+        name: 'Section 1',
+        reporter: 'Reporter 1',
+        systemPrompt: 'Prompt 1',
+        sectionPrompt: 'Write article 1'
+      },
+      {
+        id: 'section2',
+        name: 'Section 2',
+        reporter: 'Reporter 2',
+        systemPrompt: 'Prompt 2',
+        sectionPrompt: 'Write article 2'
+      }
+    ],
+    provider: {
+      type: 'localai',
+      config: {
+        baseUrl: 'http://localhost:8080',
+        model: 'gpt-3.5-turbo',
+        temperature: 0.8
+      }
+    }
+  };
+  
+  const testDir = path.join(__dirname, '..');
+  await generateAllSections(configData, testDir);
+  
+  // Verify text generation (2 sections)
+  const textCalls = fetchCalls.filter(call => call.url.includes('/chat/completions'));
+  assert.strictEqual(textCalls.length, 2);
+  
+  // Verify image generation (2 sections)
+  const imageCalls = fetchCalls.filter(call => call.url.includes('/images/generations'));
+  assert.strictEqual(imageCalls.length, 2);
+  
+  // Verify files were written (2 HTML files + 2 image files + 1 news.json)
+  assert.strictEqual(writeFileCalls.length, 5);
+  
+  // Verify PNG images were written
+  const imageCalls2 = writeFileCalls.filter(call => call.filepath.endsWith('.png'));
+  assert.strictEqual(imageCalls2.length, 2);
+  
+  // Verify image data is a buffer
+  assert.ok(imageCalls2[0].content instanceof Buffer);
+  
+  // Verify news.json includes imageUrl
+  const newsJsonCall = writeFileCalls.find(call => 
+    call.filepath.includes('news.json')
+  );
+  const newsJsonContent = JSON.parse(newsJsonCall.content);
+  assert.ok(newsJsonContent.items[0].imageUrl);
+  assert.ok(newsJsonContent.items[0].imageUrl.endsWith('.png'));
+  
+  fs.writeFile = originalWriteFile;
+  fs.mkdir = originalMkdir;
+  globalThis.fetch = originalFetch;
+});
+
+test('generateAllSections - skips images when provider does not support it', async () => {
+  let fetchCalls = [];
+  const mockResponse = {
+    ok: true,
+    json: async () => ({ response: 'Generated article content' })
+  };
+  
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    fetchCalls.push({ url, options });
+    return mockResponse;
+  };
+  
+  const originalWriteFile = fs.writeFile;
+  const originalMkdir = fs.mkdir;
+  
+  const writeFileCalls = [];
+  
+  fs.mkdir = async (dir) => {};
+  fs.writeFile = async (filepath, content) => {
+    writeFileCalls.push({ filepath, content });
+  };
+  
+  const configData = {
+    systemPrompt: 'Global prompt',
+    sections: [
+      {
+        id: 'section1',
+        name: 'Section 1',
+        reporter: 'Reporter 1',
+        systemPrompt: 'Prompt 1',
+        sectionPrompt: 'Write article 1'
+      }
+    ],
+    provider: {
+      type: 'ollama',
+      config: {
+        baseUrl: 'http://localhost:11434',
+        model: 'test-model',
+        temperature: 0.8
+      }
+    }
+  };
+  
+  const testDir = path.join(__dirname, '..');
+  await generateAllSections(configData, testDir);
+  
+  // Verify only text generation (no image generation)
+  assert.strictEqual(fetchCalls.length, 1);
+  
+  // Verify files were written (1 HTML file + 1 news.json)
+  assert.strictEqual(writeFileCalls.length, 2);
+  
+  // Verify no PNG images were written
+  const imageCalls = writeFileCalls.filter(call => call.filepath.endsWith('.png'));
+  assert.strictEqual(imageCalls.length, 0);
+  
+  // Verify news.json does not include imageUrl (or it's null)
+  const newsJsonCall = writeFileCalls.find(call => 
+    call.filepath.includes('news.json')
+  );
+  const newsJsonContent = JSON.parse(newsJsonCall.content);
+  assert.strictEqual(newsJsonContent.items[0].imageUrl, null);
+  
+  fs.writeFile = originalWriteFile;
+  fs.mkdir = originalMkdir;
+  globalThis.fetch = originalFetch;
+});
+
 test('startTimer - schedules at 1 AM', () => {
   const configData = {
     sections: [],
