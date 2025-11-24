@@ -33,29 +33,41 @@ export class OllamaProvider extends BaseProvider {
   async generate(systemPrompt, userPrompt, signal = null) {
     const url = `${this.config.baseUrl}/api/generate`;
     
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: this.config.model,
-        prompt: userPrompt,
-        system: systemPrompt,
-        stream: false,
-        options: {
-          temperature: this.config.temperature || DEFAULT_TEMPERATURE
-        }
-      }),
-      signal: signal
-    });
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          prompt: userPrompt,
+          system: systemPrompt,
+          stream: false,
+          options: {
+            temperature: this.config.temperature || DEFAULT_TEMPERATURE
+          }
+        }),
+        signal: signal
+      });
 
-    if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unable to read error response');
+        throw new Error(`Ollama API error: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data.response;
+    } catch (error) {
+      // Enhance fetch errors with more context
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error(`Failed to connect to Ollama at ${url}: ${error.message}. Check if the service is running and the baseUrl is correct.`);
+      }
+      if (error.name === 'AbortError') {
+        throw new Error('Request was aborted');
+      }
+      throw error;
     }
-
-    const data = await response.json();
-    return data.response;
   }
 
   /**

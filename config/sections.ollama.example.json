@@ -10,12 +10,11 @@
     }
   ],
   "provider": {
-    "type": "localai",
+    "type": "ollama",
     "config": {
-      "baseUrl": "http://localhost:8080",
-      "model": "mistral-7b-instruct-v0.3",
-      "temperature": 0.8,
-      "apiKey": ""
+      "baseUrl": "https://ollama.lbsa71.net",
+      "model": "mistral:instruct",
+      "temperature": 0.8
     }
   },
   "timerConfig": {

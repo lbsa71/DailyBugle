@@ -48,29 +48,41 @@ export class LocalAIProvider extends BaseProvider {
       { role: 'user', content: userPrompt }
     ];
     
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify({
-        model: this.config.model,
-        messages: messages,
-        temperature: this.config.temperature || DEFAULT_TEMPERATURE
-      }),
-      signal: signal
-    });
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+          model: this.config.model,
+          messages: messages,
+          temperature: this.config.temperature || DEFAULT_TEMPERATURE
+        }),
+        signal: signal
+      });
 
-    if (!response.ok) {
-      throw new Error(`LocalAI API error: ${response.status} ${response.statusText}`);
-    }
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unable to read error response');
+        throw new Error(`LocalAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+      }
 
-    const data = await response.json();
-    
-    // Extract content from OpenAI-compatible response format
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error('Invalid response format from LocalAI API');
+      const data = await response.json();
+      
+      // Extract content from OpenAI-compatible response format
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        throw new Error('Invalid response format from LocalAI API');
+      }
+      
+      return data.choices[0].message.content;
+    } catch (error) {
+      // Enhance fetch errors with more context
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error(`Failed to connect to LocalAI at ${url}: ${error.message}. Check if the service is running and the baseUrl is correct.`);
+      }
+      if (error.name === 'AbortError') {
+        throw new Error('Request was aborted');
+      }
+      throw error;
     }
-    
-    return data.choices[0].message.content;
   }
 
   /**

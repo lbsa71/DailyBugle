@@ -330,8 +330,20 @@ export function startTimer(configData, baseDir) {
         return;
       }
       
-      // Generation failed - log error and schedule retry
-      console.error('Error during content generation:', error.message);
+      // Generation failed - log detailed error information
+      console.error('\n========================================');
+      console.error('Error during content generation');
+      console.error('========================================');
+      console.error('Error message:', error.message);
+      console.error('Error type:', error.name || 'Unknown');
+      if (error.cause) {
+        console.error('Error cause:', error.cause);
+      }
+      if (error.stack) {
+        console.error('\nStack trace:');
+        console.error(error.stack);
+      }
+      console.error('========================================\n');
       console.log(`Scheduling retry in 10 minutes...`);
       
       // Cancel any existing retry timeout
@@ -379,18 +391,56 @@ export function startTimer(configData, baseDir) {
   attemptGeneration();
 }
 
+/**
+ * Run generation once and exit gracefully
+ */
+async function runOnce(configData, baseDir) {
+  console.log('Running in one-shot mode...\n');
+  displayConfig(configData);
+  
+  try {
+    await generateAllSections(configData, baseDir);
+    console.log('\nGeneration completed successfully. Exiting...');
+    process.exit(0);
+  } catch (error) {
+    console.error('\n========================================');
+    console.error('Error during content generation');
+    console.error('========================================');
+    console.error('Error message:', error.message);
+    console.error('Error type:', error.name || 'Unknown');
+    if (error.cause) {
+      console.error('Error cause:', error.cause);
+    }
+    if (error.stack) {
+      console.error('\nStack trace:');
+      console.error(error.stack);
+    }
+    console.error('========================================\n');
+    console.error('Generation failed. Exiting...');
+    process.exit(1);
+  }
+}
+
 // Start the web server (only when run directly, not when imported)
 // Check if this module is being run directly by comparing the resolved file paths
 const isMainModule = import.meta.url === `file://${path.resolve(process.argv[1] || '')}`.replace(/\\/g, '/') ||
                      fileURLToPath(import.meta.url) === path.resolve(process.argv[1] || '');
 
 if (isMainModule) {
-  // Display configuration at startup
-  displayConfig(config);
+  // Check for one-shot mode
+  const isOneShot = process.argv.includes('--once') || process.argv.includes('--one-shot');
   
-  server.listen(PORT, () => {
-    console.log(`Daily Bugle server running on port ${PORT}`);
-    console.log(`View the paper at http://localhost:${PORT}`);
-    startTimer(config, __dirname);
-  });
+  if (isOneShot) {
+    // Run once and exit
+    runOnce(config, __dirname);
+  } else {
+    // Display configuration at startup
+    displayConfig(config);
+    
+    server.listen(PORT, () => {
+      console.log(`Daily Bugle server running on port ${PORT}`);
+      console.log(`View the paper at http://localhost:${PORT}`);
+      startTimer(config, __dirname);
+    });
+  }
 }
