@@ -141,3 +141,4 @@ vite.config.ts.timestamp-*
 # Generated content
 public/sections/
 public/news.json
+debug/

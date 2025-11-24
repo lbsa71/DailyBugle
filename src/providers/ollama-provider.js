@@ -77,4 +77,20 @@ export class OllamaProvider extends BaseProvider {
   getName() {
     return 'ollama';
   }
+
+  /**
+   * Check if provider supports image generation
+   * @returns {boolean} False - Ollama does not support image generation
+   */
+  get canGenerateImages() {
+    return false;
+  }
+
+  /**
+   * Generate an image (not supported by Ollama)
+   * @throws {Error} Always throws - Ollama does not support image generation
+   */
+  async generateImage(prompt, signal = null) {
+    throw new Error('Image generation is not supported by Ollama provider');
+  }
 }
