@@ -7,10 +7,12 @@ import {
   serveStaticFile,
   createRequestHandler,
   callOllama,
+  generateContent,
   generateSection,
   generateAllSections,
   startTimer
 } from './index.js';
+import { OllamaProvider, LocalAIProvider } from './providers/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -243,14 +245,20 @@ test('generateSection - generates section with global system prompt', async () =
   
   const configData = {
     systemPrompt: 'Global system prompt',
-    ollamaConfig: {
-      baseUrl: 'http://localhost:11434',
-      model: 'test-model',
-      temperature: 0.8
+    provider: {
+      type: 'ollama',
+      config: {
+        baseUrl: 'http://localhost:11434',
+        model: 'test-model',
+        temperature: 0.8
+      }
     }
   };
   
-  const result = await generateSection(section, configData);
+  // Create provider instance
+  const provider = new OllamaProvider(configData.provider.config);
+  
+  const result = await generateSection(section, configData, provider);
   
   assert.strictEqual(result.id, 'test-section');
   assert.strictEqual(result.name, 'Test Section');
@@ -288,14 +296,20 @@ test('generateSection - generates section without global system prompt', async (
   };
   
   const configData = {
-    ollamaConfig: {
-      baseUrl: 'http://localhost:11434',
-      model: 'test-model',
-      temperature: 0.8
+    provider: {
+      type: 'ollama',
+      config: {
+        baseUrl: 'http://localhost:11434',
+        model: 'test-model',
+        temperature: 0.8
+      }
     }
   };
   
-  const result = await generateSection(section, configData);
+  // Create provider instance
+  const provider = new OllamaProvider(configData.provider.config);
+  
+  const result = await generateSection(section, configData, provider);
   
   assert.strictEqual(result.content, 'Article content');
   
@@ -352,10 +366,13 @@ test('generateAllSections - generates all sections and saves files', async () =>
         sectionPrompt: 'Write article 2'
       }
     ],
-    ollamaConfig: {
-      baseUrl: 'http://localhost:11434',
-      model: 'test-model',
-      temperature: 0.8
+    provider: {
+      type: 'ollama',
+      config: {
+        baseUrl: 'http://localhost:11434',
+        model: 'test-model',
+        temperature: 0.8
+      }
     }
   };
   
@@ -402,10 +419,13 @@ test('generateAllSections - generates all sections and saves files', async () =>
 test('startTimer - schedules at 1 AM', () => {
   const configData = {
     sections: [],
-    ollamaConfig: {
-      baseUrl: 'http://localhost:11434',
-      model: 'test-model',
-      temperature: 0.8
+    provider: {
+      type: 'ollama',
+      config: {
+        baseUrl: 'http://localhost:11434',
+        model: 'test-model',
+        temperature: 0.8
+      }
     }
   };
   
@@ -461,10 +481,13 @@ test('startTimer - schedules at 1 AM', () => {
 test('startTimer - schedules next day at 1 AM', () => {
   const configData = {
     sections: [],
-    ollamaConfig: {
-      baseUrl: 'http://localhost:11434',
-      model: 'test-model',
-      temperature: 0.8
+    provider: {
+      type: 'ollama',
+      config: {
+        baseUrl: 'http://localhost:11434',
+        model: 'test-model',
+        temperature: 0.8
+      }
     }
   };
   

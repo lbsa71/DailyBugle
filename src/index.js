@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { parse as parseUrl } from 'url';
+import { ProviderFactory } from './providers/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,6 +69,19 @@ let config;
 try {
   const configData = await fs.readFile(path.join(__dirname, '../config/sections.json'), 'utf-8');
   config = JSON.parse(configData);
+  
+  // Backward compatibility: convert old ollamaConfig to new provider format
+  if (config.ollamaConfig && !config.provider) {
+    config.provider = {
+      type: 'ollama',
+      config: config.ollamaConfig
+    };
+  }
+  
+  // Validate provider configuration
+  if (!config.provider || !config.provider.type) {
+    throw new Error('Configuration must include provider.type');
+  }
 } catch (error) {
   console.error('Error loading config:', error);
   process.exit(1);
@@ -81,10 +95,11 @@ function displayConfig(configData) {
   console.log('Daily Bugle Configuration');
   console.log('========================================\n');
   
-  console.log('Ollama Configuration:');
-  console.log(`  Base URL: ${configData.ollamaConfig.baseUrl}`);
-  console.log(`  Model: ${configData.ollamaConfig.model}`);
-  console.log(`  Temperature: ${configData.ollamaConfig.temperature}`);
+  console.log('AI Provider Configuration:');
+  console.log(`  Provider: ${configData.provider.type}`);
+  console.log(`  Base URL: ${configData.provider.config.baseUrl}`);
+  console.log(`  Model: ${configData.provider.config.model}`);
+  console.log(`  Temperature: ${configData.provider.config.temperature}`);
   
   console.log('\nScheduler Configuration:');
   console.log(`  Schedule: Daily at 1:00 AM`);
@@ -102,7 +117,8 @@ function displayConfig(configData) {
 }
 
 /**
- * Call Ollama API to generate content
+ * Call Ollama API to generate content (deprecated - use generateContent instead)
+ * Kept for backward compatibility with existing tests
  */
 export async function callOllama(systemPrompt, userPrompt, ollamaConfig, signal = null) {
   const url = `${ollamaConfig.baseUrl}/api/generate`;
@@ -133,15 +149,27 @@ export async function callOllama(systemPrompt, userPrompt, ollamaConfig, signal 
 }
 
 /**
- * Generate content for a single section
+ * Generate content using the configured AI provider
  */
-export async function generateSection(section, configData, signal = null) {
+export async function generateContent(systemPrompt, userPrompt, provider, signal = null) {
+  return await provider.generate(systemPrompt, userPrompt, signal);
+}
+
+/**
+ * Generate content for a single section
+ * @param {Object} section - Section configuration
+ * @param {Object} configData - Full configuration data
+ * @param {BaseProvider} provider - Provider instance to use for generation
+ * @param {AbortSignal} signal - Optional abort signal
+ */
+export async function generateSection(section, configData, provider, signal = null) {
   console.log(`Generating ${section.name} by ${section.reporter}...`);
   // Concatenate global system prompt with section-specific prompt
   const fullSystemPrompt = configData.systemPrompt 
     ? `${configData.systemPrompt} ${section.systemPrompt}`
     : section.systemPrompt;
-  const content = await callOllama(fullSystemPrompt, section.sectionPrompt, configData.ollamaConfig, signal);
+  
+  const content = await generateContent(fullSystemPrompt, section.sectionPrompt, provider, signal);
   return {
     id: section.id,
     name: section.name,
@@ -158,9 +186,12 @@ export async function generateAllSections(configData, baseDir, signal = null) {
   console.log('Starting content generation...');
   const startTime = Date.now();
   
+  // Create provider instance once for all sections
+  const provider = ProviderFactory.createProvider(configData.provider);
+  
   // Generate all sections in parallel
   const results = await Promise.all(
-    configData.sections.map(section => generateSection(section, configData, signal))
+    configData.sections.map(section => generateSection(section, configData, provider, signal))
   );
   
   // Create timestamp for filenames
@@ -299,8 +330,20 @@ export function startTimer(configData, baseDir) {
         return;
       }
       
-      // Generation failed - log error and schedule retry
-      console.error('Error during content generation:', error.message);
+      // Generation failed - log detailed error information
+      console.error('\n========================================');
+      console.error('Error during content generation');
+      console.error('========================================');
+      console.error('Error message:', error.message);
+      console.error('Error type:', error.name || 'Unknown');
+      if (error.cause) {
+        console.error('Error cause:', error.cause);
+      }
+      if (error.stack) {
+        console.error('\nStack trace:');
+        console.error(error.stack);
+      }
+      console.error('========================================\n');
       console.log(`Scheduling retry in 10 minutes...`);
       
       // Cancel any existing retry timeout
@@ -348,18 +391,56 @@ export function startTimer(configData, baseDir) {
   attemptGeneration();
 }
 
+/**
+ * Run generation once and exit gracefully
+ */
+async function runOnce(configData, baseDir) {
+  console.log('Running in one-shot mode...\n');
+  displayConfig(configData);
+  
+  try {
+    await generateAllSections(configData, baseDir);
+    console.log('\nGeneration completed successfully. Exiting...');
+    process.exit(0);
+  } catch (error) {
+    console.error('\n========================================');
+    console.error('Error during content generation');
+    console.error('========================================');
+    console.error('Error message:', error.message);
+    console.error('Error type:', error.name || 'Unknown');
+    if (error.cause) {
+      console.error('Error cause:', error.cause);
+    }
+    if (error.stack) {
+      console.error('\nStack trace:');
+      console.error(error.stack);
+    }
+    console.error('========================================\n');
+    console.error('Generation failed. Exiting...');
+    process.exit(1);
+  }
+}
+
 // Start the web server (only when run directly, not when imported)
 // Check if this module is being run directly by comparing the resolved file paths
 const isMainModule = import.meta.url === `file://${path.resolve(process.argv[1] || '')}`.replace(/\\/g, '/') ||
                      fileURLToPath(import.meta.url) === path.resolve(process.argv[1] || '');
 
 if (isMainModule) {
-  // Display configuration at startup
-  displayConfig(config);
+  // Check for one-shot mode
+  const isOneShot = process.argv.includes('--once') || process.argv.includes('--one-shot');
   
-  server.listen(PORT, () => {
-    console.log(`Daily Bugle server running on port ${PORT}`);
-    console.log(`View the paper at http://localhost:${PORT}`);
-    startTimer(config, __dirname);
-  });
+  if (isOneShot) {
+    // Run once and exit
+    runOnce(config, __dirname);
+  } else {
+    // Display configuration at startup
+    displayConfig(config);
+    
+    server.listen(PORT, () => {
+      console.log(`Daily Bugle server running on port ${PORT}`);
+      console.log(`View the paper at http://localhost:${PORT}`);
+      startTimer(config, __dirname);
+    });
+  }
 }
