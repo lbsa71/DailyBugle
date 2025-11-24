@@ -82,8 +82,8 @@
   "provider": {
     "type": "localai",
     "config": {
-      "baseUrl": "http://localhost:8080",
-      "model": "mistral-7b-instruct-v0.3",
+      "baseUrl": "https://ollama.lbsa71.net",
+      "model": "qwen3-8b",
       "temperature": 0.8,
       "apiKey": ""
     }
