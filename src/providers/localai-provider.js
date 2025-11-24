@@ -144,8 +144,19 @@ export class LocalAIProvider extends BaseProvider {
         throw new Error('Invalid image response format from LocalAI API');
       }
       
+      const base64Data = data.data[0].b64_json;
+      
+      // Validate base64 data
+      if (typeof base64Data !== 'string' || base64Data.length === 0) {
+        throw new Error('Invalid base64 image data from LocalAI API');
+      }
+      
       // Convert base64 to buffer
-      return Buffer.from(data.data[0].b64_json, 'base64');
+      try {
+        return Buffer.from(base64Data, 'base64');
+      } catch (bufferError) {
+        throw new Error(`Failed to decode base64 image data: ${bufferError.message}`);
+      }
     } catch (error) {
       // Enhance fetch errors with more context
       if (error.name === 'TypeError' && error.message.includes('fetch')) {

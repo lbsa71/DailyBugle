@@ -210,7 +210,8 @@ export async function generateAllSections(configData, baseDir, signal = null) {
         try {
           const section = configData.sections[index];
           // Create image prompt: section system prompt + article text
-          const imagePrompt = `${section.systemPrompt} ${result.content}`;
+          // Add period separator for better prompt clarity
+          const imagePrompt = `${section.systemPrompt}. Article: ${result.content}`;
           console.log(`Generating image for ${result.name}...`);
           const imageBuffer = await provider.generateImage(imagePrompt, signal);
           return { id: result.id, imageBuffer };
