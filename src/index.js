@@ -149,10 +149,33 @@ export async function callOllama(systemPrompt, userPrompt, ollamaConfig, signal 
 }
 
 /**
+ * Clean generated content by removing unwanted tags like <think>
+ * @param {string} content - Raw content from AI provider
+ * @returns {string} Cleaned content
+ */
+function cleanGeneratedContent(content) {
+  if (!content || typeof content !== 'string') {
+    return content;
+  }
+  
+  // Remove <think>...</think> tags and their contents (case-insensitive, multiline)
+  let cleaned = content.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  
+  // Also remove standalone <think/> tags
+  cleaned = cleaned.replace(/<think\s*\/?>/gi, '');
+  
+  // Clean up any extra whitespace that might result
+  cleaned = cleaned.trim();
+  
+  return cleaned;
+}
+
+/**
  * Generate content using the configured AI provider
  */
 export async function generateContent(systemPrompt, userPrompt, provider, signal = null) {
-  return await provider.generate(systemPrompt, userPrompt, signal);
+  const rawContent = await provider.generate(systemPrompt, userPrompt, signal);
+  return cleanGeneratedContent(rawContent);
 }
 
 /**
@@ -161,13 +184,36 @@ export async function generateContent(systemPrompt, userPrompt, provider, signal
  * @param {Object} configData - Full configuration data
  * @param {BaseProvider} provider - Provider instance to use for generation
  * @param {AbortSignal} signal - Optional abort signal
+ * @param {string} debugDir - Optional directory for debug files
  */
-export async function generateSection(section, configData, provider, signal = null) {
+export async function generateSection(section, configData, provider, signal = null, debugDir = null) {
   console.log(`Generating ${section.name} by ${section.reporter}...`);
   // Concatenate global system prompt with section-specific prompt
   const fullSystemPrompt = configData.systemPrompt 
     ? `${configData.systemPrompt} ${section.systemPrompt}`
     : section.systemPrompt;
+  
+  // Write debug file for text prompts
+  if (debugDir) {
+    try {
+      await fs.mkdir(debugDir, { recursive: true });
+      const debugFile = path.join(debugDir, `${section.id}_text_prompt.txt`);
+      const debugContent = `=== TEXT GENERATION PROMPT FOR: ${section.name} ===
+Section ID: ${section.id}
+Reporter: ${section.reporter}
+
+--- SYSTEM PROMPT ---
+${fullSystemPrompt}
+
+--- USER PROMPT ---
+${section.sectionPrompt}
+`;
+      await fs.writeFile(debugFile, debugContent, 'utf-8');
+      console.log(`Debug: Saved text prompt to ${debugFile}`);
+    } catch (error) {
+      console.warn(`Failed to write debug file for ${section.id}:`, error.message);
+    }
+  }
   
   const content = await generateContent(fullSystemPrompt, section.sectionPrompt, provider, signal);
   return {
@@ -189,17 +235,20 @@ export async function generateAllSections(configData, baseDir, signal = null) {
   // Create provider instance once for all sections
   const provider = ProviderFactory.createProvider(configData.provider);
   
-  // Generate all sections in parallel
-  const results = await Promise.all(
-    configData.sections.map(section => generateSection(section, configData, provider, signal))
-  );
-  
-  // Create timestamp for filenames
+  // Create debug directory
   const now = new Date();
   const isoString = now.toISOString();
   const timestamp = isoString.replace(/[:.]/g, '-').split('T')[0];
   const timeHour = isoString.split('T')[1].substring(0, 5).replace(':', '-');
   const dateFolder = `${timestamp}_${timeHour}`;
+  const debugDir = path.join(baseDir, '../debug', dateFolder);
+  
+  // Generate all sections in parallel
+  const results = await Promise.all(
+    configData.sections.map(section => generateSection(section, configData, provider, signal, debugDir))
+  );
+  
+  // Create timestamp for filenames (reuse from above)
   
   // Generate images if provider supports it
   let imageResults = [];
@@ -209,12 +258,38 @@ export async function generateAllSections(configData, baseDir, signal = null) {
       results.map(async (result, index) => {
         try {
           const section = configData.sections[index];
-          // Create image prompt: section system prompt + article text
+          // Create image prompt: section imagePrompt + article text
           // Truncate content to avoid token limits (max ~1000 chars)
           const truncatedContent = result.content.length > 1000 
             ? result.content.substring(0, 1000) + '...' 
             : result.content;
-          const imagePrompt = `${section.systemPrompt}. Article: ${truncatedContent}`;
+          // Use imagePrompt if provided, otherwise fall back to systemPrompt for backward compatibility
+          const imagePromptBase = section.imagePrompt || section.systemPrompt || '';
+          const imagePrompt = `${imagePromptBase}. Article: ${truncatedContent}`;
+          
+          // Write debug file for image prompt
+          try {
+            await fs.mkdir(debugDir, { recursive: true });
+            const debugFile = path.join(debugDir, `${result.id}_image_prompt.txt`);
+            const debugContent = `=== IMAGE GENERATION PROMPT FOR: ${result.name} ===
+Section ID: ${result.id}
+Reporter: ${result.reporter}
+
+--- IMAGE PROMPT ---
+${imagePrompt}
+
+--- FULL ARTICLE CONTENT (for reference) ---
+${result.content}
+
+--- TRUNCATED CONTENT (used in prompt) ---
+${truncatedContent}
+`;
+            await fs.writeFile(debugFile, debugContent, 'utf-8');
+            console.log(`Debug: Saved image prompt to ${debugFile}`);
+          } catch (error) {
+            console.warn(`Failed to write image debug file for ${result.id}:`, error.message);
+          }
+          
           console.log(`Generating image for ${result.name}...`);
           const imageBuffer = await provider.generateImage(imagePrompt, signal);
           return { id: result.id, imageBuffer };

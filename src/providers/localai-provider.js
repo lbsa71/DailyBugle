@@ -9,7 +9,8 @@ export class LocalAIProvider extends BaseProvider {
    * Initialize LocalAI provider
    * @param {Object} config - LocalAI configuration
    * @param {string} config.baseUrl - Base URL for LocalAI API
-   * @param {string} config.model - Model name to use
+   * @param {string} config.model - Model name to use for text generation
+   * @param {string} config.imageModel - Optional model name for image generation (defaults to config.model)
    * @param {number} config.temperature - Temperature for generation
    * @param {string} config.apiKey - Optional API key (for compatibility)
    */
@@ -119,11 +120,15 @@ export class LocalAIProvider extends BaseProvider {
       headers['Authorization'] = `Bearer ${this.config.apiKey}`;
     }
     
+    // Use imageModel if specified, otherwise fall back to model
+    const imageModel = this.config.imageModel || this.config.model;
+    
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: headers,
         body: JSON.stringify({
+          model: imageModel,
           prompt: prompt,
           n: 1,
           size: '256x256', // Small size as requested

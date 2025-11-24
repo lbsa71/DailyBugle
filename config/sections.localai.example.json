@@ -6,7 +6,8 @@
       "name": "Tagline",
       "reporter": "J. Jonah Jameson",
       "systemPrompt": "You are J. Jonah Jameson, the editor-in-chief of the Daily Bugle.",
-      "sectionPrompt": "Write a very short newspaper tagline (5-8 words max, no quotes). Make it catchy and professional."
+      "sectionPrompt": "Write a very short newspaper tagline (5-8 words max, no quotes). Make it catchy and professional.",
+      "imagePrompt": "A vintage newspaper tagline or masthead design, classic typography, professional newspaper aesthetic"
     }
   ],
   "provider": {
@@ -14,6 +15,7 @@
     "config": {
       "baseUrl": "http://localhost:8080",
       "model": "mistral-7b-instruct-v0.3",
+      "imageModel": "sd-3.5-medium-ggml",
       "temperature": 0.8,
       "apiKey": ""
     }
