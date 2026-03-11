@@ -94,7 +94,7 @@
     "type": "localai",
     "config": {
       "baseUrl": "https://ollama.lbsa71.net",
-      "model": "mixtral:8x7b",
+      "model": "qwen3:14b",
       "imageModel": "",
       "temperature": 0.8,
       "apiKey": ""
