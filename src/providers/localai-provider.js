@@ -68,7 +68,10 @@ export class LocalAIProvider extends BaseProvider {
       }
 
       // Read SSE stream and accumulate content
+      console.log(`[stream] Connected to ${url}, reading stream...`);
+      const startTime = Date.now();
       let content = '';
+      let chunkCount = 0;
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -90,12 +93,21 @@ export class LocalAIProvider extends BaseProvider {
           try {
             const parsed = JSON.parse(data);
             const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) content += delta;
+            if (delta) {
+              chunkCount++;
+              content += delta;
+              if (chunkCount === 1) {
+                console.log(`[stream] First token after ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+              }
+            }
           } catch {
             // skip malformed chunks
           }
         }
       }
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.log(`[stream] Done: ${chunkCount} chunks, ${content.length} chars in ${elapsed}s`);
 
       if (!content) {
         throw new Error('No content received from LocalAI API stream');
