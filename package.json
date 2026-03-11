@@ -1,16 +1,19 @@
 {
   "name": "daily-bugle",
   "version": "1.0.0",
-  "description": "POC for connecting to cloud-hosted Ollama and generating content on a timed basis",
+  "description": "POC for connecting to AI providers (Ollama, LocalAI) and generating content on a timed basis",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
+    "once": "node src/index.js --once",
     "dev": "node --watch src/index.js",
     "test": "node --test src/index.test.js"
   },
   "keywords": [
     "ollama",
+    "localai",
+    "ai",
     "news",
     "generator"
   ],

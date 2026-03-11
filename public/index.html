@@ -62,10 +62,35 @@
             margin-bottom: 30px;
             border-bottom: 2px solid #ddd;
             padding-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
         }
 
         .section:last-child {
             border-bottom: none;
+        }
+
+        .section.image-left {
+            flex-direction: row;
+        }
+
+        .section.image-right {
+            flex-direction: row-reverse;
+        }
+
+        .section-image {
+            flex-shrink: 0;
+            width: 256px;
+            height: 256px;
+            object-fit: cover;
+            border: 2px solid #c41e3a;
+            box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .section-content {
+            flex: 1;
+            min-width: 0;
         }
 
         .section-title {
@@ -148,6 +173,15 @@
             .section-title {
                 font-size: 1.5em;
             }
+            .section {
+                flex-direction: column !important;
+            }
+            .section-image {
+                width: 100%;
+                max-width: 256px;
+                height: auto;
+                margin: 0 auto;
+            }
         }
     </style>
 </head>
@@ -215,6 +249,7 @@
                 });
                 
                 // Display each news item
+                let imagePosition = 0; // Track position for alternating images
                 for (const item of sortedItems) {
                     try {
                         const articleResponse = await fetch(item.url);
@@ -245,13 +280,26 @@
                                 <div class="masthead-content">${content}</div>
                             `;
                         } else {
-                            sectionDiv.className = 'section';
-                            sectionDiv.innerHTML = `
-                                <h2 class="section-title">${item.name}</h2>
-                                <p class="byline">By ${item.reporter}</p>
-                                <div class="content">${content}</div>
-                                <p class="timestamp">${new Date(item.timestamp).toLocaleString()}</p>
+                            // Determine if image should be on left or right (alternating)
+                            const imageClass = item.imageUrl ? (imagePosition % 2 === 0 ? 'image-left' : 'image-right') : '';
+                            if (item.imageUrl) imagePosition++;
+                            
+                            sectionDiv.className = `section ${imageClass}`;
+                            
+                            // Build section HTML with optional image
+                            let sectionHTML = '';
+                            if (item.imageUrl) {
+                                sectionHTML += `<img src="${item.imageUrl}" alt="${item.name}" class="section-image">`;
+                            }
+                            sectionHTML += `
+                                <div class="section-content">
+                                    <h2 class="section-title">${item.name}</h2>
+                                    <p class="byline">By ${item.reporter}</p>
+                                    <div class="content">${content}</div>
+                                    <p class="timestamp">${new Date(item.timestamp).toLocaleString()}</p>
+                                </div>
                             `;
+                            sectionDiv.innerHTML = sectionHTML;
                         }
                         
                         contentDiv.appendChild(sectionDiv);
