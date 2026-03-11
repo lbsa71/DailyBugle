@@ -243,10 +243,20 @@ export async function generateAllSections(configData, baseDir, signal = null) {
   const dateFolder = `${timestamp}_${timeHour}`;
   const debugDir = path.join(baseDir, '../debug', dateFolder);
   
-  // Generate all sections in parallel
-  const results = await Promise.all(
-    configData.sections.map(section => generateSection(section, configData, provider, signal, debugDir))
-  );
+  // Generate sections - sequential or parallel based on config
+  let results;
+  if (configData.sequential) {
+    console.log('Generating sections sequentially...');
+    results = [];
+    for (const section of configData.sections) {
+      results.push(await generateSection(section, configData, provider, signal, debugDir));
+    }
+  } else {
+    console.log('Generating sections in parallel...');
+    results = await Promise.all(
+      configData.sections.map(section => generateSection(section, configData, provider, signal, debugDir))
+    );
+  }
   
   // Create timestamp for filenames (reuse from above)
   
