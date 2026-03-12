@@ -1,4 +1,5 @@
 {
+  "sequential": true,
   "systemPrompt": "You work for the Daily Bugle, a New York City newspaper. Keep responses concise and in character.",
   "sections": [
     {

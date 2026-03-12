@@ -56,7 +56,8 @@ export class LocalAIProvider extends BaseProvider {
         body: JSON.stringify({
           model: this.config.model,
           messages: messages,
-          temperature: this.config.temperature || DEFAULT_TEMPERATURE
+          temperature: this.config.temperature || DEFAULT_TEMPERATURE,
+          stream: true
         }),
         signal: signal
       });
@@ -66,14 +67,53 @@ export class LocalAIProvider extends BaseProvider {
         throw new Error(`LocalAI API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
-      const data = await response.json();
-      
-      // Extract content from OpenAI-compatible response format
-      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error('Invalid response format from LocalAI API');
+      // Read SSE stream and accumulate content
+      console.log(`[stream] Connected to ${url}, reading stream...`);
+      const startTime = Date.now();
+      let content = '';
+      let chunkCount = 0;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete line in buffer
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+          const data = trimmed.slice(6);
+          if (data === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              chunkCount++;
+              content += delta;
+              if (chunkCount === 1) {
+                console.log(`[stream] First token after ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+              }
+            }
+          } catch {
+            // skip malformed chunks
+          }
+        }
       }
-      
-      return data.choices[0].message.content;
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.log(`[stream] Done: ${chunkCount} chunks, ${content.length} chars in ${elapsed}s`);
+
+      if (!content) {
+        throw new Error('No content received from LocalAI API stream');
+      }
+
+      return content;
     } catch (error) {
       // Enhance fetch errors with more context
       if (error.name === 'TypeError' && error.message.includes('fetch')) {

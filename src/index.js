@@ -215,13 +215,26 @@ ${section.sectionPrompt}
     }
   }
   
+  const genStart = new Date();
   const content = await generateContent(fullSystemPrompt, section.sectionPrompt, provider, signal);
+  const genEnd = new Date();
+  const durationSec = (genEnd - genStart) / 1000;
+  const charsPerSec = durationSec > 0 ? (content.length / durationSec).toFixed(1) : 0;
+
   return {
     id: section.id,
     name: section.name,
     reporter: section.reporter,
     content: content,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    meta: {
+      model: configData.provider.config.model,
+      startTime: genStart.toISOString(),
+      endTime: genEnd.toISOString(),
+      durationSec: Math.round(durationSec),
+      chars: content.length,
+      charsPerSec: parseFloat(charsPerSec)
+    }
   };
 }
 
@@ -243,10 +256,20 @@ export async function generateAllSections(configData, baseDir, signal = null) {
   const dateFolder = `${timestamp}_${timeHour}`;
   const debugDir = path.join(baseDir, '../debug', dateFolder);
   
-  // Generate all sections in parallel
-  const results = await Promise.all(
-    configData.sections.map(section => generateSection(section, configData, provider, signal, debugDir))
-  );
+  // Generate sections - sequential or parallel based on config
+  let results;
+  if (configData.sequential) {
+    console.log('Generating sections sequentially...');
+    results = [];
+    for (const section of configData.sections) {
+      results.push(await generateSection(section, configData, provider, signal, debugDir));
+    }
+  } else {
+    console.log('Generating sections in parallel...');
+    results = await Promise.all(
+      configData.sections.map(section => generateSection(section, configData, provider, signal, debugDir))
+    );
+  }
   
   // Create timestamp for filenames (reuse from above)
   
@@ -347,7 +370,8 @@ ${truncatedContent}
       reporter: result.reporter,
       url: `./sections/${result.id}/${filename}`,
       imageUrl: imageFilename ? `./sections/${result.id}/${imageFilename}` : null,
-      timestamp: result.timestamp
+      timestamp: result.timestamp,
+      meta: result.meta
     });
     
     console.log(`Saved ${result.name} to ${filepath}`);
